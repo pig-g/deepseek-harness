@@ -23,6 +23,8 @@ packages:
 # Vendored framework packages keep their upstream semver ranges, while local
 # builds must resolve those matching names to this workspace's pinned sources.
 linkWorkspacePackages: true
+#injectWorkspacePackages: true
+forceLegacyDeploy: true
 
 overrides:
   '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'

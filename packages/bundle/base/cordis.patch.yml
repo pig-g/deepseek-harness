@@ -253,6 +253,13 @@
     - id: command-feedback
       name: '@deepseek-ai/dsh-command-feedback'
 
+    # Human `/cmd`: run one raw shell command directly through the bash
+    # executor, with no model turn, under the session's standing sandbox
+    # policy. Bash-only, so it follows tool-bash's win32 gating.
+    - id: command-shell
+      name: '@deepseek-ai/dsh-command-shell'
+      disabled: !!js process.platform === 'win32'
+
     - id: goal
       name: '@deepseek-ai/dsh-goal'
 
