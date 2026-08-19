@@ -59,11 +59,22 @@ export interface ConnectionConfig {
   trustedHosts?: string[]
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
   maxRequestBodyBytes?: number
+  /**
+   * Serve the privileged configuration plane (`settings.*`, `credentials.*`,
+   * `agentPreset.*`, `llm.discoverModels`) to every `trustedHosts` authority
+   * instead of loopback only. Off by default: without a real authentication
+   * layer these methods stay loopback-pinned, so an anonymous caller never
+   * reads or mutates the user's configuration. Opt in only for a deployment
+   * whose reachable surface is already walled by a firewall or a VPN (tun/
+   * utun) membership, which is the same trust this flag grants.
+   */
+  servePrivilegedToTrustedHosts?: boolean
 }
 
 export const Config: z<ConnectionConfig> = z.object({
   trustedHosts: z.array(String).default([]),
   maxRequestBodyBytes: z.natural().min(1).default(DEFAULT_MAX_REQUEST_BODY_BYTES),
+  servePrivilegedToTrustedHosts: z.boolean().default(false),
 })
 
 /**
@@ -144,7 +155,7 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
         : undefined
       if (method !== undefined
         && PRIVILEGED_METHODS.has(method)
-        && !isTrustedApiRequest(request, [])) {
+        && !isTrustedApiRequest(request, config?.servePrivilegedToTrustedHosts ? trustedHosts : [])) {
         return new Response('forbidden', { status: 403 })
       }
       if (request.method === 'GET' && (pathname === MUX_EVENTS_PATH || pathname === HOST_EVENTS_PATH)) {
