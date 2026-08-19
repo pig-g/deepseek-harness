@@ -134,6 +134,7 @@
         printUrl: true
         surfaceContext: true
         trustedHosts: !!js ctx.webStartup.trustedHosts
+        allowPrivilegedRemote: !!js ctx.webStartup.allowPrivilegedRemote
 
     # The client-plugin reload chain, always mounted: it is idle until a
     # rebuild watcher (pnpm run dev:web) actually rewrites client bundles. It
@@ -161,6 +162,9 @@
         # A deployment adding authorities keeps this expression and concatenates
         # its literals, for example: ['app.internal', ...ctx.webRuntime.trustedHosts].
         trustedHosts: !!js ctx.webRuntime.trustedHosts
+        # Serve the privileged settings/credentials/config APIs to trustedHosts
+        # (the machine's LAN + VPN literals) when --allow-privileged-remote is set.
+        servePrivilegedToTrustedHosts: !!js ctx.webRuntime.allowPrivilegedRemote
 
     - id: api-remotes
       name: '@deepseek-ai/dsh-api-remotes'

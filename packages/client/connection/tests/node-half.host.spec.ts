@@ -74,7 +74,7 @@ function fakeResponse(): { response: ServerResponse; state: { status?: number; b
   return { response, state }
 }
 
-async function mounted(config?: { trustedHosts?: string[] }): Promise<{
+async function mounted(config?: { trustedHosts?: string[]; servePrivilegedToTrustedHosts?: boolean }): Promise<{
   routes: WebRoute[]
   upgrades: WebUpgradeRoute[]
   dispose: () => Promise<void>
@@ -189,6 +189,34 @@ describe('connection node half', () => {
     const read = fakeResponse()
     await routes[0]!.handler(fakeRequest({ host: 'harness.example' }), read.response)
     expect(read.state.status).not.toBe(403)
+    await dispose()
+  })
+
+  it('serves privileged methods to a declared trusted authority when opted in', async () => {
+    const { routes, dispose } = await mounted({
+      trustedHosts: ['harness.example'],
+      servePrivilegedToTrustedHosts: true,
+    })
+    // The same declared authority that 403s by default now passes the fence
+    // (carrier-level 404 from the empty proxy proves the privileged check let
+    // it through) for the sensitive reads and the host-facing writes alike.
+    for (const method of [
+      'settings.describe', 'settings.update', 'credentials.describe', 'llm.discoverModels',
+    ]) {
+      const passed = fakeResponse()
+      await routes[0]!.handler(
+        fakeRequest({ host: 'harness.example' }, `${API_PATH}/${method}`),
+        passed.response,
+      )
+      expect(passed.state.status).toBe(404)
+    }
+    // An authority outside trustedHosts still 403s even when opted in.
+    const other = fakeResponse()
+    await routes[0]!.handler(
+      fakeRequest({ host: 'other.example' }, `${API_PATH}/settings.describe`),
+      other.response,
+    )
+    expect(other.state.status).toBe(403)
     await dispose()
   })
 

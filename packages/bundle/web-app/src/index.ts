@@ -47,12 +47,15 @@ export interface Config {
   surfaceContext: boolean
   /** Explicit `--trusted-host` authorities from this invocation. */
   trustedHosts: string[]
+  /** Serve privileged config APIs to `trustedHosts` (loopback only off). */
+  allowPrivilegedRemote: boolean
 }
 
 export const Config: z<Config> = z.object({
   printUrl: z.boolean().default(true),
   surfaceContext: z.boolean().default(true),
   trustedHosts: z.array(String).default([]),
+  allowPrivilegedRemote: z.boolean().default(false),
 })
 
 /** Bind-dependent Web values shared by the trust fence and URL display. */
@@ -61,6 +64,8 @@ export interface WebRuntimeValues {
   lanAddresses: string[]
   /** LAN literals followed by explicit invocation authorities. */
   trustedHosts: string[]
+  /** Mirror of the invocation's `--allow-privileged-remote` choice. */
+  allowPrivilegedRemote: boolean
 }
 
 /** Environment variable naming the canonical local URL of this Web GUI. */
@@ -82,7 +87,7 @@ const ALL_INTERFACES_HOST = '0.0.0.0'
  * @param extra - explicit `--trusted-host` values, in argument order.
  * @returns the LAN display addresses and invocation-derived fence authorities.
  */
-export function resolveLanTrust(bindHost: string, extra: readonly string[]): WebRuntimeValues {
+export function resolveLanTrust(bindHost: string, extra: readonly string[]): Omit<WebRuntimeValues, 'allowPrivilegedRemote'> {
   const lanAddresses = bindHost === ALL_INTERFACES_HOST
     ? Object.values(networkInterfaces()).flat()
       .filter((iface): iface is NonNullable<typeof iface> => iface !== undefined && iface.family === 'IPv4' && !iface.internal)
@@ -133,7 +138,10 @@ export const internals: { resolveDistIndex: () => string } = { resolveDistIndex 
  * @param config - validated {@link Config}.
  */
 export function apply(ctx: Context, config: Config): void {
-  const runtime = resolveLanTrust(ctx.webServer.host, config.trustedHosts)
+  const runtime: WebRuntimeValues = {
+    ...resolveLanTrust(ctx.webServer.host, config.trustedHosts),
+    allowPrivilegedRemote: config.allowPrivilegedRemote,
+  }
   // Release dependent rows only after bind-dependent trust has been sampled once.
   ctx.provide(WEB_RUNTIME_SERVICE, runtime)
   ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })

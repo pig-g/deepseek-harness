@@ -27,6 +27,8 @@ export interface WebStartupValues {
   port?: number
   /** Explicit `--trusted-host` authorities, in argument order. */
   trustedHosts: string[]
+  /** Whether privileged config APIs may serve `trustedHosts` (loopback only off). */
+  allowPrivilegedRemote: boolean
 }
 
 /** The web flag family, as commander parsed it. */
@@ -34,6 +36,7 @@ interface WebOptions {
   host?: string
   port?: string
   trustedHost?: string[]
+  allowPrivilegedRemote?: boolean
 }
 
 /**
@@ -48,6 +51,7 @@ function webCommand(): Command {
     .option('--host <host>', 'bind host')
     .option('--port <port>', 'listen port; pass 0 to let the OS pick a free one')
     .option('--trusted-host <authority...>', 'extra authority the /api browser-trust fence accepts (host or host:port; repeatable)')
+    .option('--allow-privileged-remote', 'serve the privileged settings/credentials/config APIs to trusted hosts (loopback only by default)')
     .addHelpText('after', `
 Examples:
   dsh --profile web                          serve on the composed host and port
@@ -73,6 +77,7 @@ export function apply(ctx: Context): void {
       ...options.host !== undefined && { host: options.host },
       ...options.port !== undefined && { port: Number(options.port) },
       trustedHosts: options.trustedHost ?? [],
+      allowPrivilegedRemote: options.allowPrivilegedRemote ?? false,
     } satisfies WebStartupValues)
   })
   parseCmdline(ctx, program)
