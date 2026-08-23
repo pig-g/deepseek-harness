@@ -30,14 +30,15 @@ authority that can reach the port, instead of loopback only:
 - The CLI surfaces it as `dsh web --allow-privileged-remote`, threaded
   `webStartup` → `web-app` runtime → `dsh-client-connection` config in the
   `web-app` bundle patch.
-- **Client-side persistence gate (upstream rebase port):** the rebased upstream
-  base independently disables settings for non-loopback browsers — the
-  `ui-settings` mirror picks `memory` (settings unavailable) from
-  `connection.isLoopback`, so the fence fix alone still leaves a remote browser
-  unable to edit the provider directory. The browser-half connection handle
-  therefore exposes `privilegedAvailable` = loopback **or**
-  `servePrivilegedToTrustedHosts`, and `ui-settings` gates its `'host'`/
-  `'memory'` persistence on that instead of `isLoopback`.
+- **No browser-side gate.** The upstream base gated the `ui-settings` mirror
+  on `connection.isLoopback` — non-loopback browsers picked `memory` (settings
+  unavailable) regardless of the fence, which would still leave a remote browser
+  unable to edit the provider directory. That browser gate is removed: the
+  `ui-settings` mirror always uses `'host'` persistence and attempts the
+  settings read, and the `/api` fence alone decides reachability (allowed when
+  opted in, denied otherwise). The browser cannot see the flag — cordis does not
+  deliver per-row `config` to browser plugins through `__DSH_BOOT__` — so the
+  fence is the single authoritative grant for both halves.
 
 This is a whole-grant for private internal use, per the operator's explicit
 choice: anyone who can reach the port gets the configuration plane when the

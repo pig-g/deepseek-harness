@@ -79,9 +79,10 @@ export class SettingsDescribeMirror implements SettingsDescribeFace {
 
   /**
    * @param api - settings wire face.
-   * @param persistence - 'host' when this browser holds privileged settings
-   *   (loopback, or opted in under `servePrivilegedToTrustedHosts`);
-   *   'memory' keeps remote untrusted browsers process-local.
+   * @param persistence - 'host' mirrors the Host settings document (reads +
+   *   write answers); 'memory' keeps the mirror process-local with no Host
+   *   reads. The GUI always chooses 'host' and leaves reachability to the
+   *   /api fence.
    */
   constructor(
     private readonly api: SettingsFace,

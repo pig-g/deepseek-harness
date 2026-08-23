@@ -61,9 +61,9 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
    * @param api - settings wire face (writes only; reads ride the mirror).
    * @param spec - namespace identity and optional narrowing decoder.
    * @param mirror - the shared describe mirror this scope derives from.
-   * @param persistence - 'host' when this browser holds privileged settings
-   *   (loopback, or opted in under `servePrivilegedToTrustedHosts`);
-   *   'memory' keeps remote untrusted browsers process-local.
+   * @param persistence - 'host' mirrors the Host settings document (reads +
+   *   write answers); 'memory' keeps the scope process-local with no Host
+   *   reads. The GUI always chooses 'host'.
    * @param schema - settings-owned schema operations.
    */
   constructor(
@@ -281,7 +281,7 @@ export class SettingsScopeBinder extends Service {
       connection.api,
       spec,
       this.mirror,
-      connection.privilegedAvailable ? 'host' : 'memory',
+      'host',
       this.schema,
     )
     ctx.effect(() => {

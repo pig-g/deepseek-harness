@@ -428,7 +428,7 @@ describe('SettingsScopeBinder.bind', () => {
     const wire = { settings: { describe: describeCall } }
     const mirror = new SettingsDescribeMirror(wire as never)
     const ctx = new Context()
-    ctx.provide('connection', { api: wire, isLoopback: true, privilegedAvailable: true } as never)
+    ctx.provide('connection', { api: wire, isLoopback: true } as never)
     let theme!: SettingsScope<UiTestSettings>
     let locale!: SettingsScope<UiTestSettings>
     new TestRemote(ctx)
@@ -452,12 +452,12 @@ describe('SettingsScopeBinder.bind', () => {
     expect(theme.getSnapshot()).toMatchObject({ revision: 1 })
   })
 
-  it('binds a remote browser in memory mode without starting a settings read', async () => {
+  it('leaves a bound scope pending when the mirror has not answered, without triggering a settings read', async () => {
     const describeCall = vi.fn()
     const wire = { settings: { describe: describeCall } }
     const mirror = new SettingsDescribeMirror(wire as never, 'memory')
     const ctx = new Context()
-    ctx.provide('connection', { api: wire, isLoopback: false, privilegedAvailable: false } as never)
+    ctx.provide('connection', { api: wire, isLoopback: false } as never)
     let scope!: SettingsScope<UiTestSettings>
     new TestRemote(ctx)
     await ctx.plugin(SettingsScopeBinder, { mirror, schema: settingsSchema }).await()
@@ -468,7 +468,9 @@ describe('SettingsScopeBinder.bind', () => {
       },
     })
     await fiber.await()
-    expect(scope.getSnapshot()).toMatchObject({ status: 'unavailable', mode: 'memory', writable: false })
+    // Bind always derives a host-mode scope; a mirror that cannot answer keeps
+    // it pending and never asks the wire to read.
+    expect(scope.getSnapshot()).toMatchObject({ status: 'loading', mode: 'host', writable: false })
     await fiber.dispose()
     expect(describeCall).not.toHaveBeenCalled()
   })

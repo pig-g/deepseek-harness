@@ -48,7 +48,6 @@ async function bench(served?: string[]) {
   new TestRemote(ctx)
   ctx.provide('connection', {
     isLoopback: true,
-    privilegedAvailable: true,
     api: {
       settings: { describe: describeSettings },
       credentials: { describe: describeCredentials },

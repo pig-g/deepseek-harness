@@ -70,6 +70,13 @@ describe('SettingsDescribeMirror', () => {
     expect(mirror.getSnapshot().view?.namespaces).toHaveLength(1)
   })
 
+  it('stringifies a non-Error read failure into the held error', async () => {
+    const describeCall = vi.fn(() => Promise.reject('host gone'))
+    const mirror = new SettingsDescribeMirror({ settings: { describe: describeCall } } as never)
+    await mirror.load()
+    expect(mirror.getSnapshot()).toMatchObject({ status: 'idle', error: 'host gone' })
+  })
+
   it('returns to idle after a first read that never succeeded, so ensure retries', async () => {
     const describeCall = vi.fn()
       .mockRejectedValueOnce(new Error('offline'))

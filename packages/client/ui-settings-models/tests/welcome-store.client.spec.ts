@@ -49,21 +49,6 @@ function buildWelcome(
 }
 
 describe('WelcomeNoticeStore', () => {
-  it('acknowledges in memory without calling loopback-only settings APIs', async () => {
-    const describeCall = vi.fn()
-    const mutate = vi.fn()
-    const { controller } = buildWelcome({ describe: describeCall, mutate }, 'memory')
-
-    await controller.load()
-    expect(controller.store.getSnapshot()).toEqual({ status: 'ready', acknowledged: false, error: null })
-    await expect(controller.acknowledge()).resolves.toBe(true)
-    expect(controller.store.getSnapshot()).toEqual({ status: 'ready', acknowledged: true, error: null })
-    await controller.load()
-    expect(controller.store.getSnapshot()).toEqual({ status: 'ready', acknowledged: true, error: null })
-    expect(describeCall).not.toHaveBeenCalled()
-    expect(mutate).not.toHaveBeenCalled()
-  })
-
   it('acknowledges only the exact current copy version', async () => {
     for (const [version, acknowledged] of [
       [undefined, false],
