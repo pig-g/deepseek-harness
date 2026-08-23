@@ -92,7 +92,7 @@ describe('/cmd real Loader composition through cordis.yml on POSIX', () => {
     // Discoverable through the composed registry, as a UI adapter finds it.
     expect(context.commands.list(owner).map(command => command.name)).toContain('cmd')
 
-    const executed = await context.commands.execute(owner, '/cmd printf hi-raw', signal)
+    const executed = await context.commands.execute(owner, '/cmd printf hi-raw', [], signal)
     expect(executed?.result).toEqual({
       kind: 'success',
       text: '$ printf hi-raw\nstdout:\nhi-raw\nexit code: 0',

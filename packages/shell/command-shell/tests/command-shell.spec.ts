@@ -119,6 +119,7 @@ async function run(test: Harness, suffix = ''): Promise<NonNullable<Awaited<Retu
   const execution = await test.ctx.commands.execute(
     test.agent,
     `/cmd${suffix}`,
+    [],
     new AbortController().signal,
   )
   if (execution === undefined) throw new Error('cmd command was not registered')
