@@ -88,6 +88,32 @@ function isTrustedAuthority(hostUrl: URL, trustedHosts: readonly string[]): bool
 }
 
 /**
+ * Cross-site and origin marker fences shared by both trust modes. These read
+ * only browser-attached markers and never grant trust by themselves: an
+ * explicit `sec-fetch-site: cross-site` marker is refused regardless of
+ * Origin, and when a browser attaches an Origin it must exactly equal the
+ * Host authority (compared through the same normalization as the Host). Absent
+ * markers are fine — the Host fence binds those reads. The literal `null`
+ * (sandboxed iframes, `file:` pages) is an opaque origin, refused.
+ * @param request - Node HTTP or Fetch request facts (headers).
+ * @returns true unless a browser marker proves the request is cross-site.
+ */
+function passesBrowserMarkers(request: ApiTrustRequest): boolean {
+  if (header(request.headers, 'sec-fetch-site') === 'cross-site') return false
+  const origin = header(request.headers, 'origin')
+  if (origin === undefined) return true
+  const host = header(request.headers, 'host')
+  if (host === undefined) return false
+  const hostUrl = parseAuthority(host)
+  if (hostUrl === undefined) return false
+  try {
+    return new URL(origin).host === hostUrl.host
+  } catch {
+    return false
+  }
+}
+
+/**
  * Decide whether one /api request may reach the RPC bridge.
  * @param request - Node HTTP or Fetch request facts (headers).
  * @param trustedHosts - non-loopback authorities this deployment serves: exact `host:port`, or port-less `host` matching any port.
@@ -106,18 +132,19 @@ export function isTrustedApiRequest(request: ApiTrustRequest, trustedHosts: read
   const hostUrl = parseAuthority(host)
   if (hostUrl === undefined) return false
   if (!isLoopbackHostname(hostUrl.hostname) && !isTrustedAuthority(hostUrl, trustedHosts)) return false
-  // Cross-site fence: modern browsers label the initiator relationship on
-  // every fetch; an explicit cross-site marker is refused regardless of Origin.
-  if (header(request.headers, 'sec-fetch-site') === 'cross-site') return false
-  // Origin fence: when a browser attaches an Origin it must be exactly this
-  // authority (compared through the same normalization as the Host). Absent
-  // Origin is fine — the Host fence above already bound the request. The
-  // literal "null" (sandboxed iframes, file: pages) is an opaque origin, refused.
-  const origin = header(request.headers, 'origin')
-  if (origin === undefined) return true
-  try {
-    return new URL(origin).host === hostUrl.host
-  } catch {
-    return false
-  }
+  return passesBrowserMarkers(request)
+}
+
+/**
+ * Decide whether one /api request may reach the RPC bridge under the
+ * `servePrivilegedToTrustedHosts` opt-in, which trusts any authority that can
+ * reach the port instead of pinning the Host to a listed set. Only the
+ * browser-marker fences apply: an explicit cross-site request is still refused
+ * and a foreign Origin still fails, but the Host is not required to be loopback
+ * or a `trustedHosts` member.
+ * @param request - Node HTTP or Fetch request facts (headers).
+ * @returns true unless a browser marker proves the request is cross-site.
+ */
+export function isAnyHostApiRequest(request: ApiTrustRequest): boolean {
+  return passesBrowserMarkers(request)
 }

@@ -170,8 +170,8 @@
         # A deployment adding authorities keeps this expression and concatenates
         # its literals, for example: ['app.internal', ...ctx.webRuntime.trustedHosts].
         trustedHosts: !!js ctx.webRuntime.trustedHosts
-        # Serve the privileged settings/credentials/config APIs to trustedHosts
-        # (the machine's LAN + VPN literals) when --allow-privileged-remote is set.
+        # Serve the privileged settings/credentials/config APIs to any
+        # reachable authority when --allow-privileged-remote is set.
         servePrivilegedToTrustedHosts: !!js ctx.webRuntime.allowPrivilegedRemote
 
     - id: api-remotes

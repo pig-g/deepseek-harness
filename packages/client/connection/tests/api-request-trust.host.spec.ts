@@ -1,7 +1,7 @@
 /** Behavior of the /api browser-trust fence (rebinding + cross-site defense). */
 
 import { describe, expect, it } from 'vitest'
-import { assertTrustedAuthority, isTrustedApiRequest } from '../src/api-request-trust.ts'
+import { assertTrustedAuthority, isAnyHostApiRequest, isTrustedApiRequest } from '../src/api-request-trust.ts'
 
 function request(headers: Record<string, string | undefined>): { headers: Record<string, string | undefined> } {
   return { headers }
@@ -104,5 +104,29 @@ describe('isTrustedApiRequest', () => {
     expect(isTrustedApiRequest(request({ ...markers, host: 'bad host' }), [])).toBe(false)
     expect(isTrustedApiRequest(request({ ...markers, host: '127.0.0.999' }), [])).toBe(false)
     expect(isTrustedApiRequest(request({ ...markers, host: '128.0.0.1' }), [])).toBe(false)
+  })
+})
+
+describe('isAnyHostApiRequest (the servePrivilegedToTrustedHosts opt-in)', () => {
+  it('trusts any reachable authority, dropping the loopback/trustedHosts Host pin', () => {
+    // No Host pin: a host that is neither loopback nor listed passes.
+    expect(isAnyHostApiRequest(request({ host: 'other.example:3080' }))).toBe(true)
+    expect(isAnyHostApiRequest(request({ host: '192.0.2.50:3080' }))).toBe(true)
+  })
+
+  it('still refuses an explicit cross-site marker and a foreign Origin', () => {
+    expect(isAnyHostApiRequest(request({
+      host: 'other.example', 'sec-fetch-site': 'cross-site', origin: 'http://other.example',
+    }))).toBe(false)
+    expect(isAnyHostApiRequest(request({
+      host: 'other.example', origin: 'http://evil.example',
+    }))).toBe(false)
+    expect(isAnyHostApiRequest(request({ host: 'other.example', origin: 'null' }))).toBe(false)
+  })
+
+  it('accepts a same-origin browser request from any host', () => {
+    expect(isAnyHostApiRequest(request({
+      host: 'other.example', origin: 'http://other.example', 'sec-fetch-site': 'same-origin',
+    }))).toBe(true)
   })
 })

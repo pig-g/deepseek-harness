@@ -87,6 +87,13 @@ export interface ConnectionHandle {
   readonly api: IApiClient
   /** Whether the current page authority is loopback; non-browser contexts default to true. */
   readonly isLoopback: boolean
+  /**
+   * Whether this browser may call the privileged settings/credentials/config
+   * plane: loopback by default, or a `trustedHosts` authority when
+   * `servePrivilegedToTrustedHosts` is opted in (the Host fence remains the
+   * authoritative grant). Mirrors `isLoopback` for same-origin pages.
+   */
+  readonly privilegedAvailable: boolean
   /** Generation-scoped Host facts, including the account home and native path-open capability. */
   readonly hostDescription: HostDescriptionSource
   /** Generic logical RPC channels over the same Connection transport. */
@@ -102,12 +109,21 @@ export interface ConnectionHandle {
   start(sinks: ConnectionSinks, config?: ConnectionConfig): { stop(): void }
 }
 
+/** Plugin config fields the browser half reads (a subset of the shared schema). */
+interface ClientPluginConfig {
+  /** Opt-in: serve the configuration plane to any reachable authority instead of loopback only. */
+  servePrivilegedToTrustedHosts?: boolean
+}
+
 /**
  * Client plugin body: pick the api by page mode and provide ctx.connection.
  * @param ctx - client cordis context.
+ * @param config - resolved connection config (schema defaults applied).
  */
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config?: ClientPluginConfig): void {
   const pageLocation = typeof location === 'undefined' ? undefined : location
+  const isLoopback = pageLocation === undefined || isLoopbackHostname(pageLocation.hostname)
+  const privilegedAvailable = isLoopback || config?.servePrivilegedToTrustedHosts === true
   const fixture = pageLocation !== undefined && new URLSearchParams(pageLocation.search).has('fixture')
   const fixtureClient = fixture ? new FixtureApiClient() : undefined
   const transport = (globalThis as ClientTransportGlobal).__DSH_TRANSPORT__
@@ -129,7 +145,8 @@ export function apply(ctx: Context): void {
   }
   const handle: ConnectionHandle = {
     api,
-    isLoopback: pageLocation === undefined || isLoopbackHostname(pageLocation.hostname),
+    isLoopback,
+    privilegedAvailable,
     hostDescription: {
       getSnapshot: () => description,
       subscribe: (listener) => {

@@ -19,20 +19,30 @@ the privileged pin is the sole remaining gate.
 
 ## Decision
 
-Add an opt-in, default-off switch that serves the privileged plane to the same
-`trustedHosts` set the fence already trusts, instead of loopback only:
+Add an opt-in, default-off switch that serves the privileged plane to any
+authority that can reach the port, instead of loopback only:
 
-- `ConnectionConfig.servePrivilegedToTrustedHosts` (default `false`) swaps the
-  privileged fence's empty trust list for the deployment's real `trustedHosts`.
+- `ConnectionConfig.servePrivilegedToTrustedHosts` (default `false`) drops the
+  Host pin for the whole `/api` fence (route, WebSocket, and privileged check),
+  so the flag alone is the whole trust grant for the deployment — no
+  `trustedHosts` listing is required. Only the browser-marker fences (a
+  `sec-fetch-site: cross-site` marker or a foreign `Origin`) still refuse.
 - The CLI surfaces it as `dsh web --allow-privileged-remote`, threaded
   `webStartup` → `web-app` runtime → `dsh-client-connection` config in the
   `web-app` bundle patch.
+- **Client-side persistence gate (upstream rebase port):** the rebased upstream
+  base independently disables settings for non-loopback browsers — the
+  `ui-settings` mirror picks `memory` (settings unavailable) from
+  `connection.isLoopback`, so the fence fix alone still leaves a remote browser
+  unable to edit the provider directory. The browser-half connection handle
+  therefore exposes `privilegedAvailable` = loopback **or**
+  `servePrivilegedToTrustedHosts`, and `ui-settings` gates its `'host'`/
+  `'memory'` persistence on that instead of `isLoopback`.
 
-An authority outside `trustedHosts` still 403s even when the switch is on; the
-opt-in does not open the plane to strangers — it aligns the privileged plane
-with the reachability the operator has already confined to a trusted set. The
-default (loopback-only) is unchanged, so no deployment regresses unless it opts
-in.
+This is a whole-grant for private internal use, per the operator's explicit
+choice: anyone who can reach the port gets the configuration plane when the
+switch is on. The default (loopback-only) is unchanged, so no deployment
+regresses unless it opts in.
 
 ## Alternatives considered
 
@@ -46,14 +56,14 @@ convention; the pin exists because there is no authentication layer.
 
 ## Consequences
 
-- `--host 0.0.0.0` now serves ordinary reads without opt-in but 403s the
-  configuration plane; with `--allow-privileged-remote` (and a reachable surface
-  walled to the trusted set) it also serves settings/credentials/presets and
-  model discovery to LAN/VPN peers, who are the same parties already able to
-  read the model catalog and start sessions.
-- This is a trust grant scoped to `trustedHosts`, not authentication: any peer
-  able to reach the port could read (redacted) config and change settings. That
-  remains explicitly documented as out of scope until an auth layer lands.
+- `--host 0.0.0.0` serves ordinary reads without opt-in but 403s the
+  configuration plane; with `--allow-privileged-remote` it serves
+  settings/credentials/presets and model discovery to any authority that can
+  reach the port — no `trusted-host` or LAN listing needed.
+- This is a whole-grant, not authentication: any peer able to reach the port
+  could read (redacted) config and change settings. That remains explicitly
+  documented as out of scope until an auth layer lands; the flag exists for a
+  private internal/LAN surface the operator is willing to trust as a unit.
 - Partially supersedes the loopback-pin aspect of the api-browser-trust-boundary
 decision; the carrier fences themselves (DNS-rebinding and cross-site markers)
 are unchanged and still apply to every request.

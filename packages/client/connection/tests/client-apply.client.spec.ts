@@ -10,7 +10,7 @@ import { RpcId } from '../src/client/api.ts'
 import { FixtureApiClient } from '../src/client/fixture.ts'
 import { WebApiClient } from '../src/client/web-api-client.ts'
 
-type Win = { location?: { hostname: string; search: string; origin?: string } }
+type Win = { location?: { hostname: string; search: string; port?: string; origin?: string } }
 type WebSocketGlobal = { WebSocket?: typeof WebSocket }
 
 const originalWebSocket = globalThis.WebSocket
@@ -54,9 +54,9 @@ afterEach(() => {
   else globalThis.WebSocket = originalWebSocket
 })
 
-async function mount(): Promise<ConnectionHandle> {
+async function mount(config?: Parameters<typeof apply>[1]): Promise<ConnectionHandle> {
   const ctx = new Context()
-  await ctx.plugin({ apply, inject: [] })
+  await ctx.plugin({ apply, inject: [] } as never, config as never)
   const handle = ctx.get('connection') as ConnectionHandle | undefined
   if (handle === undefined) throw new Error('ctx.connection not provided')
   return handle
@@ -82,6 +82,19 @@ describe('connection client apply', () => {
   it('reports non-loopback page authority through the connection handle', async () => {
     ;(globalThis as Win).location = { hostname: '192.0.2.20', search: '' }
     expect((await mount()).isLoopback).toBe(false)
+  })
+
+  it('grants privileged settings on loopback or any authority when opted in', async () => {
+    // Loopback: privileged even with the switch off.
+    ;(globalThis as Win).location = { hostname: '127.0.0.1', search: '', port: '3080' }
+    expect((await mount()).privilegedAvailable).toBe(true)
+    // Remote, switch off: not privileged.
+    ;(globalThis as Win).location = { hostname: '192.0.2.20', search: '', port: '3080' }
+    expect((await mount()).privilegedAvailable).toBe(false)
+    // Remote, switch on: privileged regardless of the host or any trust list.
+    expect((await mount({ servePrivilegedToTrustedHosts: true })).privilegedAvailable).toBe(true)
+    ;(globalThis as Win).location = { hostname: 'hub.internal', search: '', port: '3080' }
+    expect((await mount({ servePrivilegedToTrustedHosts: true })).privilegedAvailable).toBe(true)
   })
 
   it('start() hands out one loop, rejects a second consumer, and stop() aborts the streams', async () => {

@@ -198,14 +198,15 @@ describe('connection node half', () => {
     await dispose()
   })
 
-  it('serves privileged methods to a declared trusted authority when opted in', async () => {
+  it('serves privileged methods to any authority when opted in', async () => {
     const { routes, dispose } = await mounted({
       trustedHosts: ['harness.example'],
       servePrivilegedToTrustedHosts: true,
     })
-    // The same declared authority that 403s by default now passes the fence
-    // (carrier-level 404 from the empty proxy proves the privileged check let
-    // it through) for the sensitive reads and the host-facing writes alike.
+    // The opt-in trusts any authority that can reach the port: a declared
+    // trusted host passes the fence (carrier-level 404 from the empty proxy
+    // proves the privileged check let it through) for the sensitive reads and
+    // the host-facing writes alike.
     for (const method of [
       'settings.describe', 'settings.update', 'credentials.describe', 'llm.discoverModels',
     ]) {
@@ -216,13 +217,14 @@ describe('connection node half', () => {
       )
       expect(passed.state.status).toBe(404)
     }
-    // An authority outside trustedHosts still 403s even when opted in.
+    // An authority outside trustedHosts is equally served: the flag is the
+    // whole grant for this deployment, so no host must be listed.
     const other = fakeResponse()
     await routes[0]!.handler(
       fakeRequest({ host: 'other.example' }, `${API_PATH}/settings.describe`),
       other.response,
     )
-    expect(other.state.status).toBe(403)
+    expect(other.state.status).toBe(404)
     await dispose()
   })
 

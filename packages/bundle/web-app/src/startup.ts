@@ -29,7 +29,7 @@ export interface WebStartupValues {
   port?: number
   /** Explicit `--trusted-host` authorities, in argument order. */
   trustedHosts: string[]
-  /** Whether privileged config APIs may serve `trustedHosts` (loopback only off). */
+  /** Whether privileged config APIs may serve any reachable authority (loopback only off). */
   allowPrivilegedRemote: boolean
 }
 
@@ -55,7 +55,7 @@ function webCommand(): Command {
     .option('--no-open', 'do not open the Web UI in the default browser')
     .option('--port <port>', 'listen port; pass 0 to let the OS pick a free one')
     .option('--trusted-host <authority...>', 'extra authority the /api browser-trust fence accepts (host or host:port; repeatable)')
-    .option('--allow-privileged-remote', 'serve the privileged settings/credentials/config APIs to trusted hosts (loopback only by default)')
+    .option('--allow-privileged-remote', 'serve the privileged settings/credentials/config APIs to any reachable host (loopback only by default)')
     .addHelpText('after', `
 Examples:
   dsh --profile web                          serve on the composed host and port

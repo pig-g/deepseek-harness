@@ -7,7 +7,7 @@ import type { WebRoute, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
 import { toFetchHandler } from '@deepseek-ai/dsh-host-apiproxy'
 import { API_PATH, HOST_EVENTS_PATH, MUX_EVENTS_PATH } from './api-path.ts'
 import { bridge, DEFAULT_MAX_REQUEST_BODY_BYTES } from './http-bridge.ts'
-import { assertTrustedAuthority, isTrustedApiRequest } from './api-request-trust.ts'
+import { assertTrustedAuthority, isAnyHostApiRequest, isTrustedApiRequest } from './api-request-trust.ts'
 import { HostConnectionService } from './rpc-host.ts'
 import { rejectWebSocketUpgrade, WebSocketDownlinks } from './websocket-downlink.ts'
 
@@ -61,12 +61,12 @@ export interface ConnectionConfig {
   maxRequestBodyBytes?: number
   /**
    * Serve the privileged configuration plane (`settings.*`, `credentials.*`,
-   * `agentPreset.*`, `llm.discoverModels`) to every `trustedHosts` authority
-   * instead of loopback only. Off by default: without a real authentication
-   * layer these methods stay loopback-pinned, so an anonymous caller never
-   * reads or mutates the user's configuration. Opt in only for a deployment
-   * whose reachable surface is already walled by a firewall or a VPN (tun/
-   * utun) membership, which is the same trust this flag grants.
+   * `agentPreset.*`, `llm.discoverModels`) to any authority that can reach the
+   * port instead of loopback only. Off by default: without a real
+   * authentication layer these methods stay loopback-pinned, so an anonymous
+   * caller never reads or mutates the user's configuration. Opting in is a
+   * whole-grant to everyone who can reach the port, intended for a private
+   * internal/LAN surface the operator already walls for the same reason.
    */
   servePrivilegedToTrustedHosts?: boolean
 }
@@ -132,9 +132,10 @@ const PRIVILEGED_METHODS = new Set([
 /**
  * Mounts the API gateway under the browser transport prefix. Every request on
  * the prefix passes the browser-trust fence first (DNS-rebinding and
- * cross-site defense — [api-request-trust](./api-request-trust.ts));
- * privileged methods additionally pass it with an empty trust list, which
- * pins them to loopback.
+ * cross-site defense — [api-request-trust](./api-request-trust.ts)). By
+ * default the fence pins the Host to loopback/`trustedHosts` and privileged
+ * methods to loopback; the `servePrivilegedToTrustedHosts` opt-in drops the
+ * Host pin so any reachable authority is served.
  * @param ctx - Host plugin context.
  * @param config - resolved plugin config (schema defaults applied).
  */
@@ -146,6 +147,15 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
   // silently authorizing its hostname prefix at request time.
   for (const entry of trustedHosts) assertTrustedAuthority(entry)
   if (ctx.get('apiProxy') !== undefined) assertImageBodyCapacity(ctx, maxRequestBodyBytes)
+  // The `servePrivilegedToTrustedHosts` opt-in trusts any authority that can
+  // reach the port (no Host pinning) for the whole fence; otherwise the route
+  // gate pins to loopback/trustedHosts while the privileged methods stay
+  // loopback-only (empty trust list).
+  const optedIn = config?.servePrivilegedToTrustedHosts === true
+  const authorize = (request: Parameters<typeof isTrustedApiRequest>[0]): boolean =>
+    optedIn ? isAnyHostApiRequest(request) : isTrustedApiRequest(request, trustedHosts)
+  const authorizePrivileged = (request: Parameters<typeof isTrustedApiRequest>[0]): boolean =>
+    optedIn ? isAnyHostApiRequest(request) : isTrustedApiRequest(request, [])
   const connection = new HostConnectionService(ctx, trustedHosts)
   const fetchHandler = connection.createSharedFetchHandler(API_PATH, {
     async fetch(request) {
@@ -153,9 +163,7 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
       const method = pathname.startsWith(`${API_PATH}/`)
         ? pathname.slice(API_PATH.length + 1)
         : undefined
-      if (method !== undefined
-        && PRIVILEGED_METHODS.has(method)
-        && !isTrustedApiRequest(request, config?.servePrivilegedToTrustedHosts ? trustedHosts : [])) {
+      if (method !== undefined && PRIVILEGED_METHODS.has(method) && !authorizePrivileged(request)) {
         return new Response('forbidden', { status: 403 })
       }
       if (request.method === 'GET' && (pathname === MUX_EVENTS_PATH || pathname === HOST_EVENTS_PATH)) {
@@ -173,7 +181,7 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
     kind: 'prefix',
     path: API_PATH,
     handler: async (req, res) => {
-      if (!isTrustedApiRequest(req, trustedHosts)) {
+      if (!authorize(req)) {
         res.writeHead(403)
         res.end('forbidden')
         return
@@ -192,7 +200,7 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
       apiCtx.effect(() => apiCtx.webServer.registerUpgrade({
         path,
         handler: (req, socket, head) => {
-          if (!isTrustedApiRequest(req, trustedHosts)) {
+          if (!authorize(req)) {
             rejectWebSocketUpgrade(socket)
             return
           }
